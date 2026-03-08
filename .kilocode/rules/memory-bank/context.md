@@ -16,25 +16,39 @@ The template is a clean Next.js 16 starter with TypeScript and Tailwind CSS 4. I
 - [x] Recipe system for common features
 - [x] Built complete MatatuConnect Kenya transport system
 - [x] Removed "What Passengers Say" reviews section, added feedback CTA
-- [x] Migrated from Vercel Postgres to Supabase PostgreSQL (reverted - Drizzle ORM type issues)
-- [x] Attempted Turso DB integration (blocked - Drizzle ORM incompatible with LibSQL HTTP client)
+- [x] Database migration attempts for Vercel deployment:
+  - Vercel Postgres - Failed (Drizzle type incompatibility)
+  - Turso DB - Failed (LibSQL HTTP client incompatible with Drizzle ORM)
+  - **Solution: Replaced Drizzle ORM with raw SQL queries**
+- [x] Complete rewrite of all 15 API routes to use raw SQL
+- [x] New `src/lib/db.ts` supports both SQLite (local) and Vercel Postgres (production)
+- [x] Build passes: `bun typecheck && bun lint`
 
 ## Current Structure
 
 | File/Directory | Purpose | Status |
 |----------------|---------|--------|
+| `src/lib/db.ts` | Database layer (raw SQL) | ✅ Ready |
 | `src/app/page.tsx` | Home page | ✅ Ready |
 | `src/app/layout.tsx` | Root layout | ✅ Ready |
 | `src/app/globals.css` | Global styles | ✅ Ready |
 | `.kilocode/` | AI context & recipes | ✅ Ready |
 
-## Current Focus
+## Database Architecture
 
-The template is ready. Next steps depend on user requirements:
+### Vercel Deployment Support
 
-1. What type of application to build
-2. What features are needed
-3. Design/branding preferences
+The app now uses raw SQL queries instead of Drizzle ORM, enabling deployment to:
+- **Vercel Postgres** - Set `POSTGRES_URL` environment variable
+- **Turso DB** - Works with raw SQL (no ORM needed)
+- **Local development** - Uses SQLite
+
+### How It Works
+
+1. On Vercel: Detects `POSTGRES_URL` env var → Uses `@vercel/postgres`
+2. Local: Falls back to `better-sqlite3`
+
+All API routes use the unified `dbQuery()`, `dbGet()`, `dbInsert()`, `dbExecute()` functions.
 
 ## Quick Start Guide
 
@@ -57,26 +71,32 @@ export function Button({ children }: { children: React.ReactNode }) {
 }
 ```
 
-### To add a database:
-
-Follow `.kilocode/recipes/add-database.md`
-
 ### To add API routes:
 
 Create `src/app/api/[route]/route.ts`:
 ```tsx
-import { NextResponse } from "next/server";
+import { dbQuery, dbGet, dbInsert, initializeDatabase } from "@/lib/db";
+
+initializeDatabase();
 
 export async function GET() {
-  return NextResponse.json({ message: "Hello" });
+  const users = await dbQuery("SELECT * FROM users");
+  return NextResponse.json({ users });
 }
 ```
+
+### Database Setup
+
+On Vercel:
+1. Go to Vercel Dashboard → Storage → Create Database → Postgres
+2. The `POSTGRES_URL` is auto-set as environment variable
+3. Tables are created automatically on first deploy
 
 ## Available Recipes
 
 | Recipe | File | Use Case |
 |--------|------|----------|
-| Add Database | `.kilocode/recipes/add-database.md` | Data persistence with Drizzle + SQLite |
+| Add Database | `.kilocode/recipes/add-database.md` | Data persistence with raw SQL |
 
 ## Pending Improvements
 
@@ -90,4 +110,5 @@ export async function GET() {
 |------|---------|
 | Initial | Template created with base setup |
 | 2024-03 | Built complete MatatuConnect Kenya transport system |
-| 2024-03 | Migrated database from SQLite to Vercel Postgres to Supabase |
+| 2024-03 | Migrated database from SQLite to Vercel Postgres to Supabase (multiple attempts) |
+| 2024-03 | Complete rewrite: Replaced Drizzle ORM with raw SQL queries for Vercel compatibility |
