@@ -32,7 +32,7 @@ export async function PUT(
       .set({
         currentLat: lat,
         currentLng: lng,
-        lastLocationUpdate: new Date().toISOString(),
+        lastLocationUpdate: new Date(),
         isGpsActive: true,
         status: "en_route",
       })
