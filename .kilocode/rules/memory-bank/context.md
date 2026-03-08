@@ -16,6 +16,8 @@ The template is a clean Next.js 16 starter with TypeScript and Tailwind CSS 4. I
 - [x] Recipe system for common features
 - [x] Built complete MatatuConnect Kenya transport system
 - [x] Removed "What Passengers Say" reviews section, added feedback CTA
+- [x] Migrated from SQLite to Vercel Postgres for production
+- [x] Migrated from Vercel Postgres to Supabase PostgreSQL
 
 ## Current Structure
 
@@ -88,3 +90,4 @@ export async function GET() {
 |------|---------|
 | Initial | Template created with base setup |
 | 2024-03 | Built complete MatatuConnect Kenya transport system |
+| 2024-03 | Migrated database from SQLite to Vercel Postgres to Supabase |
