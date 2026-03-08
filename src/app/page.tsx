@@ -91,7 +91,7 @@ export default function Home() {
             Smart Ride Connect
           </h1>
           <p className="text-xl md:text-2xl text-green-100 mb-3">
-            Long Distance Matatu Transport System
+            Smart Ride Connect Transport System
           </p>
           <p className="text-green-200 max-w-2xl mx-auto mb-10 text-lg">
             Book seats, track vehicles in real-time, pay digitally, and travel

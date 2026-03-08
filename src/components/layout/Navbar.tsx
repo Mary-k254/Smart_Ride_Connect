@@ -63,8 +63,8 @@ export function Navbar() {
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2 font-bold text-xl">
             <Bus className="h-7 w-7 text-yellow-300" />
-            <span className="hidden sm:block">MatatuConnect</span>
-            <span className="sm:hidden">MC</span>
+            <span className="hidden sm:block">Smart Ride Connect</span>
+            <span className="sm:hidden">SRC</span>
           </Link>
 
           {/* Desktop Nav */}
