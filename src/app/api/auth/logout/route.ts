@@ -1,12 +1,16 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
-export async function POST() {
-  const response = NextResponse.json({ success: true });
-  response.cookies.set({
-    name: "auth_token",
-    value: "",
-    maxAge: 0,
+export async function POST(request: NextRequest) {
+  const response = NextResponse.json({ success: true, message: "Logged out successfully" });
+  
+  // Clear the auth cookie
+  response.cookies.set("auth_token", "", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
     path: "/",
+    maxAge: 0, // Expire immediately
   });
+
   return response;
 }

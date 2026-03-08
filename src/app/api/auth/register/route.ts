@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db, initializeDatabase } from "@/lib/db";
-import { users } from "@/lib/db/schema";
+import { dbQuery, dbGet, dbInsert, initializeDatabase } from "@/lib/db";
 import { hashPassword, generateToken, setAuthCookie } from "@/lib/auth";
 import { rateLimitMiddleware, addRateLimitHeaders } from "@/lib/rate-limit";
-import { eq, or } from "drizzle-orm";
 
 initializeDatabase();
 
@@ -25,7 +23,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!["passenger", "driver", "manager"].includes(role)) {
+    if (!["passenger", "driver", "manager"].includes(role || "passenger")) {
       return NextResponse.json({ error: "Invalid role" }, { status: 400 });
     }
 
@@ -37,17 +35,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if user already exists
-    const conditions = [];
-    if (email) conditions.push(eq(users.email, email));
-    if (phone) conditions.push(eq(users.phone, phone));
+    const existingUser = await dbGet(
+      "SELECT id FROM users WHERE email = ? OR phone = ?",
+      [email || null, phone || null]
+    );
 
-    const existingUser = await db
-      .select()
-      .from(users)
-      .where(or(...conditions))
-      .limit(1);
-
-    if (existingUser.length > 0) {
+    if (existingUser) {
       return NextResponse.json(
         { error: "User with this email or phone already exists" },
         { status: 409 }
@@ -55,17 +48,23 @@ export async function POST(request: NextRequest) {
     }
 
     const hashedPassword = await hashPassword(password);
+    const userRole = role || "passenger";
 
-    const [newUser] = await db
-      .insert(users)
-      .values({
-        name,
-        email: email || null,
-        phone: phone || null,
-        password: hashedPassword,
-        role,
-      })
-      .returning();
+    // Insert new user
+    const insertResult = await dbInsert(
+      "INSERT INTO users (name, email, phone, password, role) VALUES (?, ?, ?, ?, ?)",
+      [name, email || null, phone || null, hashedPassword, userRole]
+    );
+
+    // Get the created user
+    const newUser = await dbGet(
+      "SELECT id, name, email, phone, role FROM users WHERE id = ?",
+      [insertResult]
+    );
+
+    if (!newUser) {
+      return NextResponse.json({ error: "Failed to create user" }, { status: 500 });
+    }
 
     const token = await generateToken({
       userId: newUser.id,

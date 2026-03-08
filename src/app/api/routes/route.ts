@@ -1,39 +1,30 @@
 import { NextResponse } from "next/server";
-import { db, initializeDatabase } from "@/lib/db";
-import { routes, vehicles, users } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { dbQuery, initializeDatabase } from "@/lib/db";
 
 initializeDatabase();
 
 export async function GET() {
   try {
-    const allRoutes = await db
-      .select()
-      .from(routes)
-      .where(eq(routes.isActive, 1));
+    const allRoutes = await dbQuery(
+      "SELECT * FROM routes WHERE is_active = 1"
+    );
 
     // Get vehicle counts per route
     const routesWithVehicles = await Promise.all(
-      allRoutes.map(async (route) => {
-        const vehicleList = await db
-          .select({
-            id: vehicles.id,
-            plateNumber: vehicles.plateNumber,
-            model: vehicles.model,
-            capacity: vehicles.capacity,
-            status: vehicles.status,
-            currentLat: vehicles.currentLat,
-            currentLng: vehicles.currentLng,
-            driverName: users.name,
-          })
-          .from(vehicles)
-          .leftJoin(users, eq(vehicles.driverId, users.id))
-          .where(eq(vehicles.routeId, route.id));
+      allRoutes.map(async (route: any) => {
+        const vehicleList = await dbQuery(
+          `SELECT v.id, v.plate_number, v.model, v.capacity, v.status, 
+                  v.current_lat, v.current_lng, u.name as driver_name
+           FROM vehicles v
+           LEFT JOIN users u ON v.driver_id = u.id
+           WHERE v.route_id = ?`,
+          [route.id]
+        );
 
         return {
           ...route,
           vehicles: vehicleList,
-          activeVehicles: vehicleList.filter((v) => v.status === "en_route" || v.status === "active").length,
+          activeVehicles: vehicleList.filter((v: any) => v.status === "en_route" || v.status === "active").length,
         };
       })
     );

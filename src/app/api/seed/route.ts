@@ -1,106 +1,70 @@
 import { NextResponse } from "next/server";
-import { db, initializeDatabase } from "@/lib/db";
-import { users, vehicles, saccos } from "@/lib/db/schema";
+import { dbQuery, dbGet, dbInsert, dbExecute, initializeDatabase } from "@/lib/db";
 import { hashPassword } from "@/lib/auth";
-import { eq } from "drizzle-orm";
 
 initializeDatabase();
 
 export async function POST() {
   try {
     // Check if demo accounts already exist
-    const existingUser = await db
-      .select()
-      .from(users)
-      .where(eq(users.email, "passenger@demo.com"))
-      .limit(1);
+    const existingUser = await dbGet(
+      "SELECT id FROM users WHERE email = ?",
+      ["passenger@demo.com"]
+    );
 
-    if (existingUser.length > 0) {
+    if (existingUser) {
       return NextResponse.json({ message: "Demo accounts already exist" });
     }
 
     const hashedPassword = await hashPassword("demo123");
 
     // Create demo users
-    const [passenger] = await db
-      .insert(users)
-      .values({
-        name: "Jane Wanjiku",
-        email: "passenger@demo.com",
-        phone: "+254700000010",
-        password: hashedPassword,
-        role: "passenger",
-      })
-      .returning();
+    const passengerId = await dbInsert(
+      "INSERT INTO users (name, email, phone, password, role) VALUES (?, ?, ?, ?, ?)",
+      ["Jane Wanjiku", "passenger@demo.com", "+254700000010", hashedPassword, "passenger"]
+    );
 
-    const [driver] = await db
-      .insert(users)
-      .values({
-        name: "John Kamau",
-        email: "driver@demo.com",
-        phone: "+254700000011",
-        password: hashedPassword,
-        role: "driver",
-      })
-      .returning();
+    const driverId = await dbInsert(
+      "INSERT INTO users (name, email, phone, password, role) VALUES (?, ?, ?, ?, ?)",
+      ["John Kamau", "driver@demo.com", "+254700000011", hashedPassword, "driver"]
+    );
 
-    const [manager] = await db
-      .insert(users)
-      .values({
-        name: "Peter Ochieng",
-        email: "manager@demo.com",
-        phone: "+254700000012",
-        password: hashedPassword,
-        role: "manager",
-      })
-      .returning();
+    const managerId = await dbInsert(
+      "INSERT INTO users (name, email, phone, password, role) VALUES (?, ?, ?, ?, ?)",
+      ["Peter Ochieng", "manager@demo.com", "+254700000012", hashedPassword, "manager"]
+    );
 
     // Get first SACCO
-    const [sacco] = await db.select().from(saccos).limit(1);
+    const sacco = await dbGet("SELECT id FROM saccos LIMIT 1");
 
     // Update SACCO manager
     if (sacco) {
-      await db
-        .update(saccos)
-        .set({ managerId: manager.id })
-        .where(eq(saccos.id, sacco.id));
+      await dbExecute(
+        "UPDATE saccos SET manager_id = ? WHERE id = ?",
+        [managerId, sacco.id]
+      );
     }
 
     // Create demo vehicles
-    await db.insert(vehicles).values([
-      {
-        plateNumber: "KCA 123A",
-        model: "Toyota Hiace",
-        capacity: 14,
-        saccoId: sacco?.id || null,
-        driverId: driver.id,
-        routeId: 1,
-        currentLat: -1.2921,
-        currentLng: 36.8219,
-        status: "en_route",
-        isGpsActive: 1,
-        lastLocationUpdate: new Date().toISOString(),
-      },
-      {
-        plateNumber: "KCB 456B",
-        model: "Isuzu NQR",
-        capacity: 33,
-        saccoId: sacco?.id || null,
-        routeId: 2,
-        currentLat: -0.5,
-        currentLng: 36.5,
-        status: "active",
-        isGpsActive: 0,
-      },
-      {
-        plateNumber: "KCC 789C",
-        model: "Toyota Coaster",
-        capacity: 29,
-        saccoId: sacco?.id || null,
-        routeId: 3,
-        status: "inactive",
-      },
-    ]);
+    await dbInsert(
+      `INSERT INTO vehicles (plate_number, model, capacity, sacco_id, driver_id, route_id, 
+        current_lat, current_lng, status, is_gps_active, last_location_update) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ["KCA 123A", "Toyota Hiace", 14, sacco?.id || null, driverId, 1, -1.2921, 36.8219, "en_route", 1, new Date().toISOString()]
+    );
+
+    await dbInsert(
+      `INSERT INTO vehicles (plate_number, model, capacity, sacco_id, driver_id, route_id, 
+        current_lat, current_lng, status, is_gps_active) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ["KCB 456B", "Isuzu NQR", 33, sacco?.id || null, null, 2, -0.5, 36.5, "active", 0]
+    );
+
+    await dbInsert(
+      `INSERT INTO vehicles (plate_number, model, capacity, sacco_id, route_id, status) 
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      ["KCC 789C", "Toyota Coaster", 29, sacco?.id || null, 3, "inactive"]
+    );
 
     return NextResponse.json({
       success: true,

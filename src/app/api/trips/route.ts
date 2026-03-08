@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db, initializeDatabase } from "@/lib/db";
-import { trips, vehicles, routes, users } from "@/lib/db/schema";
+import { dbQuery, dbGet, dbInsert, dbExecute, initializeDatabase } from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
-import { eq, desc } from "drizzle-orm";
 
 initializeDatabase();
 
@@ -16,37 +14,37 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const driverId = searchParams.get("driverId");
 
-    let query = db
-      .select({
-        id: trips.id,
-        driverId: trips.driverId,
-        vehicleId: trips.vehicleId,
-        routeId: trips.routeId,
-        startTime: trips.startTime,
-        endTime: trips.endTime,
-        distanceKm: trips.distanceKm,
-        passengersCount: trips.passengersCount,
-        totalRevenue: trips.totalRevenue,
-        status: trips.status,
-        createdAt: trips.createdAt,
-        driverName: users.name,
-        vehiclePlate: vehicles.plateNumber,
-        routeName: routes.name,
-      })
-      .from(trips)
-      .leftJoin(users, eq(trips.driverId, users.id))
-      .leftJoin(vehicles, eq(trips.vehicleId, vehicles.id))
-      .leftJoin(routes, eq(trips.routeId, routes.id))
-      .orderBy(desc(trips.createdAt));
+    let query = `
+      SELECT 
+        t.id, t.driver_id, t.vehicle_id, t.route_id,
+        t.start_time, t.end_time, t.distance_km,
+        t.passengers_count, t.total_revenue, t.status, t.created_at,
+        u.name as driver_name, v.plate_number as vehicle_plate, r.name as route_name
+      FROM trips t
+      LEFT JOIN users u ON t.driver_id = u.id
+      LEFT JOIN vehicles v ON t.vehicle_id = v.id
+      LEFT JOIN routes r ON t.route_id = r.id
+    `;
+
+    const conditions: string[] = [];
+    const params: any[] = [];
 
     if (authUser.role === "driver") {
-      query = query.where(eq(trips.driverId, authUser.userId)) as typeof query;
+      conditions.push("t.driver_id = ?");
+      params.push(authUser.userId);
     } else if (driverId) {
-      query = query.where(eq(trips.driverId, parseInt(driverId))) as typeof query;
+      conditions.push("t.driver_id = ?");
+      params.push(parseInt(driverId));
     }
 
-    const result = await query;
-    return NextResponse.json({ trips: result });
+    if (conditions.length > 0) {
+      query += " WHERE " + conditions.join(" AND ");
+    }
+
+    query += " ORDER BY t.created_at DESC";
+
+    const trips = await dbQuery(query, params);
+    return NextResponse.json({ trips });
   } catch (error) {
     console.error("Get trips error:", error);
     return NextResponse.json({ error: "Failed to get trips" }, { status: 500 });
@@ -70,24 +68,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const [newTrip] = await db
-      .insert(trips)
-      .values({
-        driverId: authUser.userId,
-        vehicleId,
-        routeId,
-        startTime: new Date().toISOString(),
-        status: "ongoing",
-      })
-      .returning();
+    const tripId = await dbInsert(
+      "INSERT INTO trips (driver_id, vehicle_id, route_id, start_time, status) VALUES (?, ?, ?, ?, 'ongoing')",
+      [authUser.userId, vehicleId, routeId, new Date().toISOString()]
+    );
 
     // Update vehicle status
-    await db
-      .update(vehicles)
-      .set({ status: "en_route" })
-      .where(eq(vehicles.id, vehicleId));
+    await dbExecute(
+      "UPDATE vehicles SET status = 'en_route' WHERE id = ?",
+      [vehicleId]
+    );
 
-    return NextResponse.json({ trip: newTrip }, { status: 201 });
+    const trip = await dbGet("SELECT * FROM trips WHERE id = ?", [tripId]);
+
+    return NextResponse.json({ trip }, { status: 201 });
   } catch (error) {
     console.error("Create trip error:", error);
     return NextResponse.json({ error: "Failed to start trip" }, { status: 500 });

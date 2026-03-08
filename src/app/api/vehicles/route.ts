@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db, initializeDatabase } from "@/lib/db";
-import { vehicles, users, routes, saccos } from "@/lib/db/schema";
+import { dbQuery, dbGet, dbInsert, initializeDatabase } from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
 import { rateLimitMiddleware, addRateLimitHeaders } from "@/lib/rate-limit";
-import { eq } from "drizzle-orm";
 
 initializeDatabase();
 
@@ -18,36 +16,28 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const routeId = searchParams.get("routeId");
 
-    let query = db
-      .select({
-        id: vehicles.id,
-        plateNumber: vehicles.plateNumber,
-        model: vehicles.model,
-        capacity: vehicles.capacity,
-        status: vehicles.status,
-        currentLat: vehicles.currentLat,
-        currentLng: vehicles.currentLng,
-        lastLocationUpdate: vehicles.lastLocationUpdate,
-        isGpsActive: vehicles.isGpsActive,
-        routeId: vehicles.routeId,
-        driverId: vehicles.driverId,
-        driverName: users.name,
-        driverPhone: users.phone,
-        routeName: routes.name,
-        routeOrigin: routes.origin,
-        routeDestination: routes.destination,
-        saccoName: saccos.name,
-      })
-      .from(vehicles)
-      .leftJoin(users, eq(vehicles.driverId, users.id))
-      .leftJoin(routes, eq(vehicles.routeId, routes.id))
-      .leftJoin(saccos, eq(vehicles.saccoId, saccos.id));
+    let query = `
+      SELECT 
+        v.id, v.plate_number, v.model, v.capacity, v.status,
+        v.current_lat, v.current_lng, v.last_location_update, v.is_gps_active,
+        v.route_id, v.driver_id, v.sacco_id,
+        u.name as driver_name, u.phone as driver_phone,
+        r.name as route_name, r.origin as route_origin, r.destination as route_destination,
+        s.name as sacco_name
+      FROM vehicles v
+      LEFT JOIN users u ON v.driver_id = u.id
+      LEFT JOIN routes r ON v.route_id = r.id
+      LEFT JOIN saccos s ON v.sacco_id = s.id
+    `;
 
-    const result = routeId
-      ? await query.where(eq(vehicles.routeId, parseInt(routeId)))
-      : await query;
+    if (routeId) {
+      query += ` WHERE v.route_id = ?`;
+      const vehicles = await dbQuery(query, [parseInt(routeId)]);
+      return addRateLimitHeaders(NextResponse.json({ vehicles }), request);
+    }
 
-    return addRateLimitHeaders(NextResponse.json({ vehicles: result }), request);
+    const vehicles = await dbQuery(query);
+    return addRateLimitHeaders(NextResponse.json({ vehicles }), request);
   } catch (error) {
     console.error("Get vehicles error:", error);
     return NextResponse.json({ error: "Failed to get vehicles" }, { status: 500 });
@@ -71,19 +61,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const [newVehicle] = await db
-      .insert(vehicles)
-      .values({
-        plateNumber,
-        model,
-        capacity: capacity || 14,
-        saccoId: saccoId || null,
-        driverId: driverId || null,
-        routeId: routeId || null,
-      })
-      .returning();
+    const vehicleId = await dbInsert(
+      "INSERT INTO vehicles (plate_number, model, capacity, sacco_id, driver_id, route_id) VALUES (?, ?, ?, ?, ?, ?)",
+      [plateNumber, model, capacity || 14, saccoId || null, driverId || null, routeId || null]
+    );
 
-    return NextResponse.json({ vehicle: newVehicle }, { status: 201 });
+    const vehicle = await dbGet("SELECT * FROM vehicles WHERE id = ?", [vehicleId]);
+
+    return NextResponse.json({ vehicle }, { status: 201 });
   } catch (error) {
     console.error("Create vehicle error:", error);
     return NextResponse.json({ error: "Failed to create vehicle" }, { status: 500 });

@@ -1,10 +1,40 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db, initializeDatabase } from "@/lib/db";
-import { vehicles } from "@/lib/db/schema";
+import { dbQuery, dbGet, dbExecute, initializeDatabase } from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
-import { eq } from "drizzle-orm";
 
 initializeDatabase();
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const vehicle = await dbGet(
+      "SELECT * FROM vehicles WHERE id = ?",
+      [parseInt(id)]
+    );
+
+    if (!vehicle) {
+      return NextResponse.json({ error: "Vehicle not found" }, { status: 404 });
+    }
+
+    return NextResponse.json({
+      vehicle: {
+        id: vehicle.id,
+        plateNumber: vehicle.plate_number,
+        currentLat: vehicle.current_lat,
+        currentLng: vehicle.current_lng,
+        lastLocationUpdate: vehicle.last_location_update,
+        isGpsActive: vehicle.is_gps_active,
+        status: vehicle.status,
+      },
+    });
+  } catch (error) {
+    console.error("Get vehicle location error:", error);
+    return NextResponse.json({ error: "Failed to get location" }, { status: 500 });
+  }
+}
 
 export async function PUT(
   request: NextRequest,
@@ -18,59 +48,37 @@ export async function PUT(
 
     const { id } = await params;
     const body = await request.json();
-    const { lat, lng } = body;
+    const { latitude, longitude } = body;
 
-    if (!lat || !lng) {
+    if (latitude === undefined || longitude === undefined) {
       return NextResponse.json(
         { error: "Latitude and longitude are required" },
         { status: 400 }
       );
     }
 
-    await db
-      .update(vehicles)
-      .set({
-        currentLat: lat,
-        currentLng: lng,
-        lastLocationUpdate: new Date().toISOString(),
-        isGpsActive: 1,
-        status: "en_route",
-      })
-      .where(eq(vehicles.id, parseInt(id)));
+    // Check if this vehicle belongs to the driver
+    const vehicle = await dbGet(
+      "SELECT * FROM vehicles WHERE id = ? AND driver_id = ?",
+      [parseInt(id), authUser.userId]
+    );
+
+    if (!vehicle) {
+      return NextResponse.json(
+        { error: "Vehicle not found or not assigned to you" },
+        { status: 404 }
+      );
+    }
+
+    // Update location
+    await dbExecute(
+      "UPDATE vehicles SET current_lat = ?, current_lng = ?, last_location_update = CURRENT_TIMESTAMP, is_gps_active = 1 WHERE id = ?",
+      [latitude, longitude, parseInt(id)]
+    );
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Update location error:", error);
+    console.error("Update vehicle location error:", error);
     return NextResponse.json({ error: "Failed to update location" }, { status: 500 });
-  }
-}
-
-export async function GET(
-  _request: NextRequest,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  try {
-    const { id } = await params;
-    const [vehicle] = await db
-      .select({
-        id: vehicles.id,
-        currentLat: vehicles.currentLat,
-        currentLng: vehicles.currentLng,
-        lastLocationUpdate: vehicles.lastLocationUpdate,
-        status: vehicles.status,
-        isGpsActive: vehicles.isGpsActive,
-      })
-      .from(vehicles)
-      .where(eq(vehicles.id, parseInt(id)))
-      .limit(1);
-
-    if (!vehicle) {
-      return NextResponse.json({ error: "Vehicle not found" }, { status: 404 });
-    }
-
-    return NextResponse.json({ location: vehicle });
-  } catch (error) {
-    console.error("Get location error:", error);
-    return NextResponse.json({ error: "Failed to get location" }, { status: 500 });
   }
 }

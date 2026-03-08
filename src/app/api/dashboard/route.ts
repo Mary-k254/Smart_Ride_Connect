@@ -1,8 +1,6 @@
 import { NextResponse } from "next/server";
-import { db, initializeDatabase } from "@/lib/db";
-import { trips, bookings, vehicles, users, payments, reviews } from "@/lib/db/schema";
+import { dbQuery, initializeDatabase } from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
-import { eq, count, sum, avg } from "drizzle-orm";
 
 initializeDatabase();
 
@@ -14,89 +12,73 @@ export async function GET() {
     }
 
     // Total vehicles
-    const [vehicleCount] = await db
-      .select({ count: count() })
-      .from(vehicles);
+    const vehicleCount = await dbQuery("SELECT COUNT(*) as count FROM vehicles");
 
     // Active vehicles
-    const [activeVehicleCount] = await db
-      .select({ count: count() })
-      .from(vehicles)
-      .where(eq(vehicles.status, "en_route"));
+    const activeVehicleCount = await dbQuery(
+      "SELECT COUNT(*) as count FROM vehicles WHERE status = 'en_route'"
+    );
 
     // Total drivers
-    const [driverCount] = await db
-      .select({ count: count() })
-      .from(users)
-      .where(eq(users.role, "driver"));
+    const driverCount = await dbQuery(
+      "SELECT COUNT(*) as count FROM users WHERE role = 'driver'"
+    );
 
     // Total passengers
-    const [passengerCount] = await db
-      .select({ count: count() })
-      .from(users)
-      .where(eq(users.role, "passenger"));
+    const passengerCount = await dbQuery(
+      "SELECT COUNT(*) as count FROM users WHERE role = 'passenger'"
+    );
 
     // Total trips
-    const [tripCount] = await db
-      .select({ count: count() })
-      .from(trips);
+    const tripCount = await dbQuery("SELECT COUNT(*) as count FROM trips");
 
     // Total revenue
-    const [revenueResult] = await db
-      .select({ total: sum(payments.amount) })
-      .from(payments)
-      .where(eq(payments.status, "completed"));
+    const revenueResult = await dbQuery(
+      "SELECT SUM(amount) as total FROM payments WHERE status = 'completed'"
+    );
 
     // Total bookings
-    const [bookingCount] = await db
-      .select({ count: count() })
-      .from(bookings);
+    const bookingCount = await dbQuery("SELECT COUNT(*) as count FROM bookings");
 
     // Average rating
-    const [avgRating] = await db
-      .select({ avg: avg(reviews.rating) })
-      .from(reviews);
+    const avgRating = await dbQuery(
+      "SELECT AVG(rating) as avg FROM reviews"
+    );
 
     // Recent trips
-    const recentTrips = await db
-      .select({
-        id: trips.id,
-        driverName: users.name,
-        vehiclePlate: vehicles.plateNumber,
-        status: trips.status,
-        totalRevenue: trips.totalRevenue,
-        passengersCount: trips.passengersCount,
-        startTime: trips.startTime,
-        endTime: trips.endTime,
-      })
-      .from(trips)
-      .leftJoin(users, eq(trips.driverId, users.id))
-      .leftJoin(vehicles, eq(trips.vehicleId, vehicles.id))
-      .limit(10);
+    const recentTrips = await dbQuery(`
+      SELECT 
+        t.id, t.status, t.total_revenue, t.passengers_count, t.start_time, t.end_time,
+        u.name as driver_name, v.plate_number as vehicle_plate
+      FROM trips t
+      LEFT JOIN users u ON t.driver_id = u.id
+      LEFT JOIN vehicles v ON t.vehicle_id = v.id
+      ORDER BY t.created_at DESC
+      LIMIT 10
+    `);
 
     // Driver performance
-    const driverPerformance = await db
-      .select({
-        driverId: trips.driverId,
-        driverName: users.name,
-        totalTrips: count(trips.id),
-        totalRevenue: sum(trips.totalRevenue),
-      })
-      .from(trips)
-      .leftJoin(users, eq(trips.driverId, users.id))
-      .groupBy(trips.driverId, users.name)
-      .limit(10);
+    const driverPerformance = await dbQuery(`
+      SELECT 
+        t.driver_id, u.name as driver_name,
+        COUNT(t.id) as total_trips, SUM(t.total_revenue) as total_revenue
+      FROM trips t
+      LEFT JOIN users u ON t.driver_id = u.id
+      GROUP BY t.driver_id, u.name
+      ORDER BY total_revenue DESC
+      LIMIT 10
+    `);
 
     return NextResponse.json({
       stats: {
-        totalVehicles: vehicleCount.count,
-        activeVehicles: activeVehicleCount.count,
-        totalDrivers: driverCount.count,
-        totalPassengers: passengerCount.count,
-        totalTrips: tripCount.count,
-        totalRevenue: revenueResult.total || 0,
-        totalBookings: bookingCount.count,
-        averageRating: avgRating.avg || 0,
+        totalVehicles: vehicleCount[0]?.count || 0,
+        activeVehicles: activeVehicleCount[0]?.count || 0,
+        totalDrivers: driverCount[0]?.count || 0,
+        totalPassengers: passengerCount[0]?.count || 0,
+        totalTrips: tripCount[0]?.count || 0,
+        totalRevenue: revenueResult[0]?.total || 0,
+        totalBookings: bookingCount[0]?.count || 0,
+        averageRating: avgRating[0]?.avg || 0,
       },
       recentTrips,
       driverPerformance,

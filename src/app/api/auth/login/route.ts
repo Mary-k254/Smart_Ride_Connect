@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db, initializeDatabase } from "@/lib/db";
-import { users } from "@/lib/db/schema";
+import { dbGet, initializeDatabase } from "@/lib/db";
 import { verifyPassword, generateToken, setAuthCookie } from "@/lib/auth";
 import { rateLimitMiddleware, addRateLimitHeaders } from "@/lib/rate-limit";
-import { eq, or } from "drizzle-orm";
 
 initializeDatabase();
 
@@ -25,11 +23,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const [user] = await db
-      .select()
-      .from(users)
-      .where(or(eq(users.email, identifier), eq(users.phone, identifier)))
-      .limit(1);
+    // Find user by email or phone
+    const user = await dbGet(
+      "SELECT id, name, email, phone, password, role, is_active FROM users WHERE email = ? OR phone = ?",
+      [identifier, identifier]
+    );
 
     if (!user) {
       return NextResponse.json(
@@ -38,7 +36,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!user.isActive) {
+    if (!user.is_active) {
       return NextResponse.json(
         { error: "Account is deactivated. Contact support." },
         { status: 403 }

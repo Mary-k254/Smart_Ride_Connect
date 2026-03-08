@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db, initializeDatabase } from "@/lib/db";
-import { payments, bookings, notifications } from "@/lib/db/schema";
+import { dbQuery, dbGet, dbInsert, dbExecute, initializeDatabase } from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
 import { generateTransactionId } from "@/lib/utils";
-import { eq } from "drizzle-orm";
 
 initializeDatabase();
 
@@ -25,17 +23,16 @@ export async function POST(request: NextRequest) {
     }
 
     // Get booking
-    const [booking] = await db
-      .select()
-      .from(bookings)
-      .where(eq(bookings.id, bookingId))
-      .limit(1);
+    const booking = await dbGet(
+      "SELECT * FROM bookings WHERE id = ?",
+      [bookingId]
+    );
 
     if (!booking) {
       return NextResponse.json({ error: "Booking not found" }, { status: 404 });
     }
 
-    if (booking.paymentStatus === "paid") {
+    if (booking.payment_status === "paid") {
       return NextResponse.json({ error: "Booking already paid" }, { status: 400 });
     }
 
@@ -47,37 +44,26 @@ export async function POST(request: NextRequest) {
     if (paymentSuccess) {
       const receipt = `RECEIPT-${transactionId}`;
 
-      const [payment] = await db
-        .insert(payments)
-        .values({
-          bookingId,
-          passengerId: authUser.userId,
-          amount: booking.fareAmount,
-          method,
-          transactionId,
-          status: "completed",
-          phoneNumber: phoneNumber || null,
-          receipt,
-        })
-        .returning();
+      // Insert payment
+      const paymentId = await dbInsert(
+        `INSERT INTO payments (booking_id, passenger_id, amount, method, transaction_id, status, phone_number, receipt)
+         VALUES (?, ?, ?, ?, ?, 'completed', ?, ?)`,
+        [bookingId, authUser.userId, booking.fare_amount, method, transactionId, phoneNumber || null, receipt]
+      );
 
       // Update booking payment status
-      await db
-        .update(bookings)
-        .set({
-          paymentStatus: "paid",
-          paymentMethod: method,
-          status: "confirmed",
-        })
-        .where(eq(bookings.id, bookingId));
+      await dbExecute(
+        "UPDATE bookings SET payment_status = 'paid', payment_method = ?, status = 'confirmed' WHERE id = ?",
+        [method, bookingId]
+      );
 
       // Create notification
-      await db.insert(notifications).values({
-        userId: authUser.userId,
-        title: "Payment Successful",
-        message: `Payment of KES ${booking.fareAmount} received. Transaction ID: ${transactionId}`,
-        type: "payment",
-      });
+      await dbInsert(
+        "INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)",
+        [authUser.userId, "Payment Successful", `Payment of KES ${booking.fare_amount} received. Transaction ID: ${transactionId}`, "payment"]
+      );
+
+      const payment = await dbGet("SELECT * FROM payments WHERE id = ?", [paymentId]);
 
       return NextResponse.json({
         success: true,
@@ -101,12 +87,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const result = await db
-      .select()
-      .from(payments)
-      .where(eq(payments.passengerId, authUser.userId));
+    const payments = await dbQuery(
+      "SELECT * FROM payments WHERE passenger_id = ?",
+      [authUser.userId]
+    );
 
-    return NextResponse.json({ payments: result });
+    return NextResponse.json({ payments });
   } catch (error) {
     console.error("Get payments error:", error);
     return NextResponse.json({ error: "Failed to get payments" }, { status: 500 });

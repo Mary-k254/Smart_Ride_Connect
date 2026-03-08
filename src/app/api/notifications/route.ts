@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db, initializeDatabase } from "@/lib/db";
-import { notifications } from "@/lib/db/schema";
+import { dbQuery, dbGet, dbExecute, initializeDatabase } from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
-import { eq, desc } from "drizzle-orm";
 
 initializeDatabase();
 
@@ -13,16 +11,14 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const result = await db
-      .select()
-      .from(notifications)
-      .where(eq(notifications.userId, authUser.userId))
-      .orderBy(desc(notifications.createdAt))
-      .limit(50);
+    const notifications = await dbQuery(
+      "SELECT * FROM notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 50",
+      [authUser.userId]
+    );
 
-    const unreadCount = result.filter((n: any) => !n.isRead).length;
+    const unreadCount = notifications.filter((n: any) => !n.is_read).length;
 
-    return NextResponse.json({ notifications: result, unreadCount });
+    return NextResponse.json({ notifications, unreadCount });
   } catch (error) {
     console.error("Get notifications error:", error);
     return NextResponse.json({ error: "Failed to get notifications" }, { status: 500 });
@@ -40,16 +36,16 @@ export async function PUT(request: NextRequest) {
     const { notificationId } = body;
 
     if (notificationId) {
-      await db
-        .update(notifications)
-        .set({ isRead: 1 })
-        .where(eq(notifications.id, notificationId));
+      await dbExecute(
+        "UPDATE notifications SET is_read = 1 WHERE id = ?",
+        [notificationId]
+      );
     } else {
       // Mark all as read
-      await db
-        .update(notifications)
-        .set({ isRead: 1 })
-        .where(eq(notifications.userId, authUser.userId));
+      await dbExecute(
+        "UPDATE notifications SET is_read = 1 WHERE user_id = ?",
+        [authUser.userId]
+      );
     }
 
     return NextResponse.json({ success: true });

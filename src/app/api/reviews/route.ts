@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db, initializeDatabase } from "@/lib/db";
-import { reviews, users } from "@/lib/db/schema";
+import { dbQuery, dbGet, dbInsert, initializeDatabase } from "@/lib/db";
 import { getAuthUser } from "@/lib/auth";
-import { eq, desc, avg } from "drizzle-orm";
 
 initializeDatabase();
 
@@ -11,38 +9,36 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const driverId = searchParams.get("driverId");
 
-    let query = db
-      .select({
-        id: reviews.id,
-        passengerId: reviews.passengerId,
-        driverId: reviews.driverId,
-        rating: reviews.rating,
-        comment: reviews.comment,
-        isReported: reviews.isReported,
-        createdAt: reviews.createdAt,
-        passengerName: users.name,
-      })
-      .from(reviews)
-      .leftJoin(users, eq(reviews.passengerId, users.id))
-      .orderBy(desc(reviews.createdAt));
+    let query = `
+      SELECT 
+        r.id, r.passenger_id, r.driver_id, r.rating, r.comment, 
+        r.is_reported, r.created_at, r.trip_id, r.booking_id,
+        u.name as passenger_name
+      FROM reviews r
+      LEFT JOIN users u ON r.passenger_id = u.id
+    `;
 
     if (driverId) {
-      query = query.where(eq(reviews.driverId, parseInt(driverId))) as typeof query;
+      query += ` WHERE r.driver_id = ?`;
+      query += ` ORDER BY r.created_at DESC`;
+      const reviews = await dbQuery(query, [parseInt(driverId)]);
+
+      // Calculate average rating
+      const avgResult = await dbQuery(
+        "SELECT AVG(rating) as avg FROM reviews WHERE driver_id = ?",
+        [parseInt(driverId)]
+      );
+
+      return NextResponse.json({ 
+        reviews, 
+        averageRating: avgResult[0]?.avg || null 
+      });
     }
 
-    const result = await query;
+    query += " ORDER BY r.created_at DESC";
+    const reviews = await dbQuery(query);
 
-    // Calculate average rating if driverId provided
-    let averageRating = null;
-    if (driverId) {
-      const avgResult = await db
-        .select({ avg: avg(reviews.rating) })
-        .from(reviews)
-        .where(eq(reviews.driverId, parseInt(driverId)));
-      averageRating = avgResult[0]?.avg;
-    }
-
-    return NextResponse.json({ reviews: result, averageRating });
+    return NextResponse.json({ reviews, averageRating: null });
   } catch (error) {
     console.error("Get reviews error:", error);
     return NextResponse.json({ error: "Failed to get reviews" }, { status: 500 });
@@ -73,19 +69,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const [newReview] = await db
-      .insert(reviews)
-      .values({
-        passengerId: authUser.userId,
-        driverId,
-        tripId: tripId || null,
-        bookingId: bookingId || null,
-        rating,
-        comment: comment || null,
-      })
-      .returning();
+    const reviewId = await dbInsert(
+      "INSERT INTO reviews (passenger_id, driver_id, trip_id, booking_id, rating, comment) VALUES (?, ?, ?, ?, ?, ?)",
+      [authUser.userId, driverId, tripId || null, bookingId || null, rating, comment || null]
+    );
 
-    return NextResponse.json({ review: newReview }, { status: 201 });
+    const review = await dbGet("SELECT * FROM reviews WHERE id = ?", [reviewId]);
+
+    return NextResponse.json({ review }, { status: 201 });
   } catch (error) {
     console.error("Create review error:", error);
     return NextResponse.json({ error: "Failed to create review" }, { status: 500 });
