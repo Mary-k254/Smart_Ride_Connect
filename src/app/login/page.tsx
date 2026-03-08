@@ -116,16 +116,6 @@ export default function LoginPage() {
             </Link>
           </p>
         </div>
-
-        {/* Demo accounts */}
-        <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-          <p className="text-xs font-semibold text-gray-500 mb-2">Demo Accounts:</p>
-          <div className="space-y-1 text-xs text-gray-600">
-            <p>📱 Passenger: passenger@demo.com / demo123</p>
-            <p>🚌 Driver: driver@demo.com / demo123</p>
-            <p>📊 Manager: manager@demo.com / demo123</p>
-          </div>
-        </div>
       </div>
     </div>
   );
