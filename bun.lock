@@ -7,6 +7,7 @@
       "dependencies": {
         "@supabase/supabase-js": "^2.47.0",
         "@upstash/ratelimit": "^2.0.5",
+        "@vercel/postgres": "^0.10.0",
         "bcryptjs": "^3.0.3",
         "better-sqlite3": "^12.6.2",
         "date-fns": "^4.1.0",
@@ -16,6 +17,7 @@
         "lucide-react": "^0.577.0",
         "next": "^16.1.3",
         "postgres": "^3.4.5",
+        "postgres-js": "^0.1.0",
         "react": "^19.2.3",
         "react-dom": "^19.2.3",
         "react-leaflet": "^5.0.0",
@@ -895,6 +897,8 @@
 
     "postgres-interval": ["postgres-interval@3.0.0", "", {}, "sha512-BSNDnbyZCXSxgA+1f5UU2GmwhoI0aU5yMxRGO8CdFEcY2BQF9xm/7MqKnYoM1nJDk8nONNWDk9WeSmePFhQdlw=="],
 
+    "postgres-js": ["postgres-js@0.1.0", "", { "dependencies": { "strtok": ">=0.1.1" } }, "sha512-vvqdSv87YmfoeaT+8TzOsrtv7odxg8esToUf/j7y3lY/6eJAVGz4THrV3xwizdS1Eg8XtKqBx7XaBo3vvATlXw=="],
+
     "postgres-range": ["postgres-range@1.1.4", "", {}, "sha512-i/hbxIE9803Alj/6ytL7UHQxRvZkI9O4Sy+J3HGc4F4oo/2eQAjTSNJ0bfxyse3bH0nuVesCk+3IRLaMtG3H6w=="],
 
     "prebuild-install": ["prebuild-install@7.1.3", "", { "dependencies": { "detect-libc": "^2.0.0", "expand-template": "^2.0.3", "github-from-package": "0.0.0", "minimist": "^1.2.3", "mkdirp-classic": "^0.5.3", "napi-build-utils": "^2.0.0", "node-abi": "^3.3.0", "pump": "^3.0.0", "rc": "^1.2.7", "simple-get": "^4.0.0", "tar-fs": "^2.0.0", "tunnel-agent": "^0.6.0" }, "bin": { "prebuild-install": "bin.js" } }, "sha512-8Mf2cbV7x1cXPUILADGI3wuhfqWvtiLA1iclTDbFRZkgRQS0NqsPZphna9V+HyTEadheuPmjaJMsbzKQFOzLug=="],
@@ -998,6 +1002,8 @@
     "strip-bom": ["strip-bom@3.0.0", "", {}, "sha512-vavAMRXOgBVNF6nyEEmL3DBK19iRpDcoIwW+swQ+CbGiu7lju6t+JklA1MHweoWtadgt4ISVUsXLyDq34ddcwA=="],
 
     "strip-json-comments": ["strip-json-comments@3.1.1", "", {}, "sha512-6fPc+R4ihwqP6N/aIv2f1gMH8lOVtWQHoqC4yK6oSDVVocumAsfCqjkXnqiYMhmMwS/mEHLp7Vehlt3ql6lEig=="],
+
+    "strtok": ["strtok@0.1.1", "", {}, "sha512-oFxZ1solwmTdMCf9THelBG5mvRz8tvpD+zj0vl9oFwj/wADdrYOx2R0YHYqok8RMurquDD2ymSncoZowxttAsA=="],
 
     "styled-jsx": ["styled-jsx@5.1.6", "", { "dependencies": { "client-only": "0.0.1" }, "peerDependencies": { "react": ">= 16.8.0 || 17.x.x || ^18.0.0-0 || ^19.0.0-0" } }, "sha512-qSVyDTeMotdvQYoHWLNGwRFJHC+i+ZvdBRYosOFgC+Wg1vx4frN2/RG/NA7SYqqvKNLf39P2LSRA2pu6n0XYZA=="],
 

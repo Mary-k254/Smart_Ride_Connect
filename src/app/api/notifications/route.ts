@@ -20,7 +20,7 @@ export async function GET() {
       .orderBy(desc(notifications.createdAt))
       .limit(50);
 
-    const unreadCount = result.filter((n) => !n.isRead).length;
+    const unreadCount = result.filter((n: any) => !n.isRead).length;
 
     return NextResponse.json({ notifications: result, unreadCount });
   } catch (error) {
