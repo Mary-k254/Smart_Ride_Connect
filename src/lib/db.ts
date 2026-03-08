@@ -1,7 +1,7 @@
-// Database module using raw SQL for Vercel Postgres / Turso DB compatibility
-// This replaces Drizzle ORM to work with any SQL database via HTTP client
+// Database module using raw SQL for Vercel Postgres / SQLite compatibility
+// Uses pg library for PostgreSQL and better-sqlite3 for local development
 
-import { sql } from "@vercel/postgres";
+import { Pool } from "pg";
 import Database from "better-sqlite3";
 import path from "path";
 import fs from "fs";
@@ -9,8 +9,28 @@ import fs from "fs";
 // Determine if we're running on Vercel (has POSTGRES_URL env var)
 const isVercel = !!process.env.POSTGRES_URL;
 
+// PostgreSQL connection pool for Vercel
+let pgPool: Pool | null = null;
+
 // SQLite for local development
 let sqlite: Database.Database | null = null;
+
+// Helper to convert ? placeholders to $1, $2, etc for PostgreSQL
+function convertQuery(query: string): string {
+  let paramIndex = 1;
+  return query.replace(/\?/g, () => `$${paramIndex++}`);
+}
+
+// Get or create PostgreSQL pool
+function getPgPool(): Pool {
+  if (!pgPool) {
+    pgPool = new Pool({
+      connectionString: process.env.POSTGRES_URL,
+      ssl: process.env.NODE_ENV === "production" ? { rejectUnauthorized: false } : false,
+    });
+  }
+  return pgPool;
+}
 
 // Initialize the appropriate database based on environment
 export async function initializeDatabase() {
@@ -27,9 +47,11 @@ export async function initializeDatabase() {
 
 async function initializePostgresTables() {
   // Create tables if they don't exist (PostgreSQL syntax)
+  const pool = getPgPool();
+  
   try {
     // Users table
-    await sql`
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS users (
         id SERIAL PRIMARY KEY,
         name TEXT NOT NULL,
@@ -42,10 +64,10 @@ async function initializePostgresTables() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
-    `;
+    `);
 
     // SACCOS table
-    await sql`
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS saccos (
         id SERIAL PRIMARY KEY,
         name TEXT NOT NULL,
@@ -57,10 +79,10 @@ async function initializePostgresTables() {
         is_active INTEGER DEFAULT 1,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
-    `;
+    `);
 
     // Routes table
-    await sql`
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS routes (
         id SERIAL PRIMARY KEY,
         name TEXT NOT NULL,
@@ -76,10 +98,10 @@ async function initializePostgresTables() {
         is_active INTEGER DEFAULT 1,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
-    `;
+    `);
 
     // Vehicles table
-    await sql`
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS vehicles (
         id SERIAL PRIMARY KEY,
         plate_number TEXT UNIQUE NOT NULL,
@@ -95,10 +117,10 @@ async function initializePostgresTables() {
         is_gps_active INTEGER DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
-    `;
+    `);
 
     // Bookings table
-    await sql`
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS bookings (
         id SERIAL PRIMARY KEY,
         passenger_id INTEGER NOT NULL REFERENCES users(id),
@@ -119,10 +141,10 @@ async function initializePostgresTables() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
-    `;
+    `);
 
     // Trips table
-    await sql`
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS trips (
         id SERIAL PRIMARY KEY,
         driver_id INTEGER NOT NULL REFERENCES users(id),
@@ -136,10 +158,10 @@ async function initializePostgresTables() {
         status TEXT DEFAULT 'ongoing',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
-    `;
+    `);
 
     // Payments table
-    await sql`
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS payments (
         id SERIAL PRIMARY KEY,
         booking_id INTEGER NOT NULL REFERENCES bookings(id),
@@ -152,10 +174,10 @@ async function initializePostgresTables() {
         receipt TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
-    `;
+    `);
 
     // Reviews table
-    await sql`
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS reviews (
         id SERIAL PRIMARY KEY,
         passenger_id INTEGER NOT NULL REFERENCES users(id),
@@ -167,10 +189,10 @@ async function initializePostgresTables() {
         is_reported INTEGER DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
-    `;
+    `);
 
     // Notifications table
-    await sql`
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS notifications (
         id SERIAL PRIMARY KEY,
         user_id INTEGER NOT NULL REFERENCES users(id),
@@ -180,10 +202,10 @@ async function initializePostgresTables() {
         is_read INTEGER DEFAULT 0,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
-    `;
+    `);
 
     // Traffic alerts table
-    await sql`
+    await pool.query(`
       CREATE TABLE IF NOT EXISTS traffic_alerts (
         id SERIAL PRIMARY KEY,
         route_id INTEGER REFERENCES routes(id),
@@ -196,24 +218,24 @@ async function initializePostgresTables() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         expires_at TIMESTAMP
       )
-    `;
+    `);
 
     // Seed initial data
-    await seedPostgresData();
+    await seedPostgresData(pool);
     console.log("Postgres tables initialized successfully!");
   } catch (error) {
     console.error("Error initializing Postgres tables:", error);
   }
 }
 
-async function seedPostgresData() {
+async function seedPostgresData(pool: Pool) {
   try {
     // Check if routes already exist
-    const result = await sql`SELECT COUNT(*) as count FROM routes`;
-    if (result.rows[0].count > 0) return;
+    const result = await pool.query("SELECT COUNT(*) as count FROM routes");
+    if (parseInt(result.rows[0].count) > 0) return;
 
     // Seed routes (major Kenyan matatu routes)
-    await sql`
+    await pool.query(`
       INSERT INTO routes (name, origin, destination, origin_lat, origin_lng, dest_lat, dest_lng, distance_km, base_fare_per_km, estimated_duration_min) VALUES
       ('Nairobi - Mombasa', 'Nairobi CBD', 'Mombasa', -1.2921, 36.8219, -4.0435, 39.6682, 480, 1.5, 480),
       ('Nairobi - Kisumu', 'Nairobi CBD', 'Kisumu', -1.2921, 36.8219, -0.0917, 34.7680, 350, 1.5, 360),
@@ -223,24 +245,24 @@ async function seedPostgresData() {
       ('Nairobi - Machakos', 'Nairobi CBD', 'Machakos', -1.2921, 36.8219, -1.5177, 37.2634, 65, 1.5, 75),
       ('Nairobi - Nyeri', 'Nairobi CBD', 'Nyeri', -1.2921, 36.8219, -0.4167, 36.9500, 155, 1.5, 150),
       ('Mombasa - Malindi', 'Mombasa', 'Malindi', -4.0435, 39.6682, -3.2138, 40.1169, 120, 1.5, 120)
-    `;
+    `);
 
     // Seed saccos
-    await sql`
+    await pool.query(`
       INSERT INTO saccos (name, registration_number, phone, email, address) VALUES
       ('Modern Coast Express', 'SACCO001', '+254700000001', 'info@moderncoast.co.ke', 'Nairobi CBD'),
       ('Easy Coach', 'SACCO002', '+254700000002', 'info@easycoach.co.ke', 'Nairobi CBD'),
       ('Mash Poa', 'SACCO003', '+254700000003', 'info@mashpoa.co.ke', 'Nairobi CBD'),
       ('Guardian Angel', 'SACCO004', '+254700000004', 'info@guardian.co.ke', 'Mombasa')
-    `;
+    `);
 
     // Seed traffic alerts
-    await sql`
+    await pool.query(`
       INSERT INTO traffic_alerts (route_id, title, description, severity, lat, lng) VALUES
       (1, 'Heavy Traffic at Mlolongo', 'Expect delays of 30-45 minutes near Mlolongo junction', 'high', -1.3500, 36.9000),
       (2, 'Road Works at Mai Mahiu', 'Single lane traffic due to road construction', 'medium', -0.9833, 36.5167),
       (3, 'Normal Traffic', 'Traffic flowing smoothly on Nakuru highway', 'low', -0.8000, 36.4000)
-    `;
+    `);
 
     console.log("Postgres data seeded successfully!");
   } catch (error) {
@@ -455,8 +477,10 @@ function initializeSqlite() {
 // Execute a query - uses appropriate database based on environment
 export async function dbQuery(query: string, params: any[] = []) {
   if (isVercel) {
-    // Use Postgres
-    const result = await sql.query(query, params);
+    // Use Postgres with converted query
+    const convertedQuery = convertQuery(query);
+    const pool = getPgPool();
+    const result = await pool.query(convertedQuery, params);
     return result.rows;
   } else {
     // Use SQLite
@@ -469,8 +493,10 @@ export async function dbQuery(query: string, params: any[] = []) {
 // Execute an insert/update/delete - returns the result
 export async function dbExecute(query: string, params: any[] = []) {
   if (isVercel) {
-    // Use Postgres
-    const result = await sql.query(query, params);
+    // Use Postgres with converted query
+    const convertedQuery = convertQuery(query);
+    const pool = getPgPool();
+    const result = await pool.query(convertedQuery, params);
     return { lastInsertRowid: result.rowCount, rowsAffected: result.rowCount, rows: result.rows };
   } else {
     // Use SQLite
@@ -496,7 +522,9 @@ export async function dbAll(query: string, params: any[] = []) {
 export async function dbInsert(query: string, params: any[] = []) {
   if (isVercel) {
     // Use Postgres - need to use RETURNING id in query
-    const result = await sql.query(query, params);
+    const convertedQuery = convertQuery(query);
+    const pool = getPgPool();
+    const result = await pool.query(convertedQuery, params);
     // For PostgreSQL with RETURNING id, the id is in the first row
     if (result.rows && result.rows.length > 0) {
       return result.rows[0].id;
@@ -509,5 +537,5 @@ export async function dbInsert(query: string, params: any[] = []) {
   }
 }
 
-// Export sql for direct access when needed
-export { sql, sqlite };
+// Export for direct access when needed
+export { sqlite };
