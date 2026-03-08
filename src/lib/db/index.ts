@@ -1,8 +1,16 @@
-import { sql } from "@vercel/postgres";
-import { drizzle } from "drizzle-orm/vercel-postgres";
+import postgres from "postgres";
+import { drizzle } from "drizzle-orm/postgres-js";
 import * as schema from "./schema";
 
-// Create the database connection using Vercel Postgres
+// Create the database connection using Supabase PostgreSQL
+// Connection string format: postgres://postgres:[PASSWORD]@db.[PROJECT-REF].supabase.co:5432/postgres
+const connectionString = process.env.DATABASE_URL || process.env.POSTGRES_URL;
+
+if (!connectionString) {
+  console.warn("DATABASE_URL or POSTGRES_URL not set. Database operations will fail.");
+}
+
+export const sql = postgres(connectionString || "postgres://localhost:5432/postgres");
 export const db = drizzle(sql, { schema });
 
 // Initialize tables
@@ -174,8 +182,8 @@ export async function initializeDatabase() {
 
 async function seedInitialData() {
   // Check if routes already exist
-  const result = await sql`SELECT COUNT(*) as count FROM routes`;
-  const count = Number(result.rows[0]?.count || 0);
+  const result = await sql<{ count: string }[]>`SELECT COUNT(*) as count FROM routes`;
+  const count = Number(result[0]?.count || 0);
   if (count > 0) return;
 
   // Seed routes (major Kenyan matatu routes)
