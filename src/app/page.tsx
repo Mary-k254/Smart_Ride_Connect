@@ -342,7 +342,7 @@ export default function Home() {
               </Link>
             </div>
             <div className="text-sm">
-              © 2024 Smart Ride Connect. All rights reserved.
+              © 2026 Smart Ride Connect. All rights reserved.
             </div>
           </div>
         </div>
