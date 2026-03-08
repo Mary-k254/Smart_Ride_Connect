@@ -300,58 +300,22 @@ export default function Home() {
         </div>
       </section>
 
-      {/* Reviews Preview */}
+      {/* Feedback CTA */}
       <section className="py-16 px-4 bg-gray-50">
-        <div className="max-w-6xl mx-auto">
-          <h2 className="text-3xl font-bold text-center text-gray-900 mb-12">
-            What Passengers Say
+        <div className="max-w-6xl mx-auto text-center">
+          <h2 className="text-3xl font-bold text-gray-900 mb-4">
+            Have Feedback?
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {[
-              {
-                name: "Wanjiku M.",
-                route: "Nairobi → Mombasa",
-                rating: 5,
-                comment:
-                  "Amazing! I tracked the matatu from Nairobi and knew exactly when to leave my house. No more waiting at the stage!",
-              },
-              {
-                name: "Kamau J.",
-                route: "Nairobi → Kisumu",
-                rating: 5,
-                comment:
-                  "The M-Pesa payment is so convenient. I paid from my phone and got a receipt instantly. Very professional service.",
-              },
-              {
-                name: "Achieng O.",
-                route: "Mombasa → Malindi",
-                rating: 4,
-                comment:
-                  "Booking my seat in advance saved me so much stress. The driver was on time and the fare was exactly as shown.",
-              },
-            ].map((review) => (
-              <div
-                key={review.name}
-                className="bg-white rounded-xl p-6 shadow-sm border border-gray-100"
-              >
-                <div className="flex items-center gap-1 mb-3">
-                  {Array.from({ length: review.rating }).map((_, i) => (
-                    <Star
-                      key={i}
-                      className="h-4 w-4 text-yellow-400 fill-yellow-400"
-                    />
-                  ))}
-                </div>
-                <p className="text-gray-600 text-sm mb-4 italic">
-                  &ldquo;{review.comment}&rdquo;
-                </p>
-                <div>
-                  <div className="font-semibold text-gray-900">{review.name}</div>
-                  <div className="text-xs text-gray-400">{review.route}</div>
-                </div>
-              </div>
-            ))}
-          </div>
+          <p className="text-gray-500 mb-8 max-w-2xl mx-auto">
+            We value your input! Share your experience or report any issues to help us improve our service.
+          </p>
+          <Link
+            href="/reviews"
+            className="inline-flex items-center gap-2 bg-green-600 text-white px-6 py-3 rounded-xl font-semibold hover:bg-green-700 transition-colors"
+          >
+            <Star className="h-5 w-5" />
+            Leave Feedback
+          </Link>
         </div>
       </section>
 
