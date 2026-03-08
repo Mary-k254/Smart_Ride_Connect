@@ -494,8 +494,19 @@ export async function dbAll(query: string, params: any[] = []) {
 
 // Insert and get the last insert ID
 export async function dbInsert(query: string, params: any[] = []) {
-  const result = await dbExecute(query, params);
-  return result.lastInsertRowid;
+  if (isVercel) {
+    // Use Postgres - need to use RETURNING id in query
+    const result = await sql.query(query, params);
+    // For PostgreSQL with RETURNING id, the id is in the first row
+    if (result.rows && result.rows.length > 0) {
+      return result.rows[0].id;
+    }
+    return result.rowCount;
+  } else {
+    // Use SQLite
+    const result = await dbExecute(query, params);
+    return result.lastInsertRowid;
+  }
 }
 
 // Export sql for direct access when needed

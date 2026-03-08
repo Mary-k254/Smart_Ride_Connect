@@ -50,9 +50,9 @@ export async function POST(request: NextRequest) {
     const hashedPassword = await hashPassword(password);
     const userRole = role || "passenger";
 
-    // Insert new user
+    // Insert new user - use RETURNING id for PostgreSQL compatibility
     const insertResult = await dbInsert(
-      "INSERT INTO users (name, email, phone, password, role) VALUES (?, ?, ?, ?, ?)",
+      "INSERT INTO users (name, email, phone, password, role) VALUES (?, ?, ?, ?, ?) RETURNING id",
       [name, email || null, phone || null, hashedPassword, userRole]
     );
 
