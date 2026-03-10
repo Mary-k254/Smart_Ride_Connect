@@ -6,7 +6,6 @@ import { rateLimitMiddleware, addRateLimitHeaders } from "@/lib/rate-limit";
 initializeDatabase();
 
 export async function POST(request: NextRequest) {
-  // Apply rate limiting
   const rateLimitResponse = rateLimitMiddleware(request);
   if (rateLimitResponse) {
     return rateLimitResponse;
@@ -34,7 +33,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check if user already exists
     const existingUser = await dbGet(
       "SELECT id FROM users WHERE email = ? OR phone = ?",
       [email || null, phone || null]
@@ -50,13 +48,21 @@ export async function POST(request: NextRequest) {
     const hashedPassword = await hashPassword(password);
     const userRole = role || "passenger";
 
-    // Insert new user - use RETURNING id for PostgreSQL compatibility
-    const insertResult = await dbInsert(
-      "INSERT INTO users (name, email, phone, password, role) VALUES (?, ?, ?, ?, ?) RETURNING id",
-      [name, email || null, phone || null, hashedPassword, userRole]
-    );
+    const isVercel = !!process.env.POSTGRES_URL;
 
-    // Get the created user
+    let insertResult;
+    if (isVercel) {
+      insertResult = await dbInsert(
+        "INSERT INTO users (name, email, phone, password, role) VALUES ($1, $2, $3, $4, $5) RETURNING id",
+        [name, email || null, phone || null, hashedPassword, userRole]
+      );
+    } else {
+      insertResult = await dbInsert(
+        "INSERT INTO users (name, email, phone, password, role) VALUES (?, ?, ?, ?, ?)",
+        [name, email || null, phone || null, hashedPassword, userRole]
+      );
+    }
+
     const newUser = await dbGet(
       "SELECT id, name, email, phone, role FROM users WHERE id = ?",
       [insertResult]
